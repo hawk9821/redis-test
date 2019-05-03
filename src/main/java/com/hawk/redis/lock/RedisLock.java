@@ -97,37 +97,33 @@ public class RedisLock {
         return false;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         RedisLock lock = new RedisLock();
         String value = lock.getLock("hawk_lock", 10000, 10);
         if (value != null) {
             System.out.println("获取到锁,执行业务");
         }
         lock.releaseLock1("hawk_lock", value);
-
-        for (int i = 0; i < 20; i++) {
-            System.out.print(i + "        ");
-            lock.isLimit("127.0.0.1","6000","10");
-        }
+        System.out.println("释放锁======");
+        lock.isLimit("127.0.0.2", "60", "10");
 
     }
 
+
+
     public boolean isLimit(String ip, String exprise, String limit) {
         Jedis jedis = RedisManager.getJedisClient();
-        String script = "local num = redis.call('incr',KEYS[1]) \n" +
-                "if tonumber(num) == 1 then \n" +
-                "redis.call('expire',ARGV[1])\n" +
-                "return 1 \n" +
-                "elseif tonumber(num) > tonumber(ARGV[2]) then \n" +
-                "return 0 \n" +
-                "else \n" +
-                "return 1 \n" +
-                "end";
+        String script = "local num = redis.call('incr',KEYS[1])\n" +
+                "if tonumber(num) == 1 then\n" +
+                "redis.call('expire',KEYS[1],ARGV[1])\n" + "return 1\n" +
+                "elseif tonumber(num) > tonumber(ARGV[2]) then\n" +
+                "return 0\n" +
+                "else return 1\n" + "end";
         List argvs = new ArrayList();
         argvs.add(exprise);
         argvs.add(limit);
         Object result = jedis.eval(script, Collections.singletonList(ip), argvs);
-        if ((Long)result == 1) {
+        if ((Long) result == 1) {
             System.out.println("不限流.......");
             return false;
         } else {
