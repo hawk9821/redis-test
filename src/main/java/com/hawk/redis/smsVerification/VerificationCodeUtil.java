@@ -6,6 +6,7 @@ import redis.clients.jedis.Jedis;
 import java.util.*;
 
 /**
+ * 验证码
  * @author zhangdonghao
  * @date 2019/5/3
  */
