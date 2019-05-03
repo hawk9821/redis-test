@@ -1,5 +1,6 @@
 package com.hawk.redis.lock;
 
+import com.hawk.redis.util.RedisManager;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
@@ -40,22 +41,23 @@ public class RedisLock {
             e.printStackTrace();
         } finally {
             if (jedis != null) {
-                jedis.close();
+                RedisManager.returnJedis(jedis);
             }
         }
         return null;
     }
 
     /**
-     * 释放锁
+     * 释放锁 redis事物实现
      *
      * @param key
      * @param value
      * @return
      */
     public boolean releaseLock(String key, String value) {
-        Jedis jedis = RedisManager.getJedisClient();
+        Jedis jedis = null;
         try {
+            jedis = RedisManager.getJedisClient();
             jedis.watch(key);
             System.out.println(key + "  :   " + jedis.get(key));
             while (true) {
@@ -75,7 +77,9 @@ public class RedisLock {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-
+            if (jedis != null){
+                RedisManager.returnJedis(jedis);
+            }
         }
         return false;
     }
@@ -88,13 +92,21 @@ public class RedisLock {
      * @return
      */
     public boolean releaseLock1(String key, String value) {
-        Jedis jedis = RedisManager.getJedisClient();
-        String script = "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end";
-        Object result = jedis.eval(script, Collections.singletonList(key), Collections.singletonList(value));
-        if ("1".equals(result)) {
-            return true;
+        Jedis jedis = null;
+        try {
+            jedis = RedisManager.getJedisClient();
+            String script = "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end";
+            Object result = jedis.eval(script, Collections.singletonList(key), Collections.singletonList(value));
+            if ("1".equals(result)) {
+                return true;
+            }
+            return false;
+        } finally {
+            if (jedis != null){
+                RedisManager.returnJedis(jedis);
+            }
         }
-        return false;
+
     }
 
     public static void main(String[] args) throws InterruptedException {
@@ -105,30 +117,37 @@ public class RedisLock {
         }
         lock.releaseLock1("hawk_lock", value);
         System.out.println("释放锁======");
-        lock.isLimit("127.0.0.2", "60", "10");
-
+        for (int i = 0; i < 25; i++) {
+            String s = lock.isLimit("192.168.1.1", "60", "10") ? "一分钟内访问超过10次限制访问" : "未超过不限制";
+            System.out.println(i + "   :" + s);
+        }
     }
 
 
-
     public boolean isLimit(String ip, String exprise, String limit) {
-        Jedis jedis = RedisManager.getJedisClient();
-        String script = "local num = redis.call('incr',KEYS[1])\n" +
-                "if tonumber(num) == 1 then\n" +
-                "redis.call('expire',KEYS[1],ARGV[1])\n" + "return 1\n" +
-                "elseif tonumber(num) > tonumber(ARGV[2]) then\n" +
-                "return 0\n" +
-                "else return 1\n" + "end";
-        List argvs = new ArrayList();
-        argvs.add(exprise);
-        argvs.add(limit);
-        Object result = jedis.eval(script, Collections.singletonList(ip), argvs);
-        if ((Long) result == 1) {
-            System.out.println("不限流.......");
-            return false;
-        } else {
-            System.out.println("限流.......");
-            return true;
+        Jedis jedis = null;
+        try {
+            jedis = RedisManager.getJedisClient();
+            String script = "local num = redis.call('incr',KEYS[1])\n" +
+                    "if tonumber(num) == 1 then\n" +
+                    "redis.call('expire',KEYS[1],ARGV[1])\n" + "return 1\n" +
+                    "elseif tonumber(num) > tonumber(ARGV[2]) then\n" +
+                    "return 0\n" +
+                    "else return 1\n" + "end";
+            List argvs = new ArrayList();
+            argvs.add(exprise);
+            argvs.add(limit);
+            Object result = jedis.eval(script, Collections.singletonList(ip), argvs);
+            if ((Long) result == 1) {
+                return false;
+            } else {
+                return true;
+            }
+        } finally {
+            if (jedis != null){
+                RedisManager.returnJedis(jedis);
+            }
         }
+
     }
 }

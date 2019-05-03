@@ -1,4 +1,4 @@
-package com.hawk.redis.lock;
+package com.hawk.redis.util;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -23,9 +23,9 @@ public class RedisManager {
         return null;
     }
 
-    private static void returnJedis(JedisPool pool,Jedis jedis){
+    public static void returnJedis(Jedis jedis){
         if (jedis != null){
-            pool.returnResource(jedis);
+            jedisPool.returnResource(jedis);
         }
     }
 }
